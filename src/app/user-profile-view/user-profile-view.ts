@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { FetchApiDataService } from '../fetch-api-data';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
@@ -6,154 +6,167 @@ import { MatDialog } from '@angular/material/dialog';
 import { DirectorDialog } from '../director-dialog/director-dialog';
 import { MovieDetailsDialog } from '../movie-details-dialog/movie-details-dialog';
 import { GenreDialog } from '../genre-dialog/genre-dialog';
-
-
-
-
-/**
- * User profile view component
- */
-
+import { forkJoin } from 'rxjs';
+import { map } from 'rxjs';
 @Component({
-  selector: 'app-user-profile-view',
   standalone: false,
+  selector: 'app-user-profile-view',
   templateUrl: './user-profile-view.html',
   styleUrls: ['./user-profile-view.scss']
 })
-export class UserProfileView implements OnInit   {
-    /** User profile data */
-@Input() user: any = {};
+export class UserProfileView implements OnInit {
+  user: any = {};
+  birthday: Date | null = null;
+  password = '';
+  confirmPassword = '';
+  showPasswordFields = false;
+  favoriteMovies: any[] = [];
 
-@Input() birthday :string= '';
+  constructor(
+    public fetchApiData: FetchApiDataService,
+    public snackBar: MatSnackBar,
+    public dialog: MatDialog,
+    public router: Router
+  ) {}
 
-@Input() firstName: string = '';
-
-@Input() lastName: string = '';
-
-favoriteMovies : any[] = [];
-
-
-
-
-
-constructor(
-  public fetchApiData: FetchApiDataService,
-public snackBar : MatSnackBar,
-public dialog: MatDialog,
-public router: Router
-) {}
-
-ngOnInit(): void {
+  ngOnInit(): void {
     this.getUserData();
-}
-
- /** Gets formatted birthday */
-get displaybirthday() {
-  return this.birthday;
-}
-  /** Sets birthday value */
-set displaybirthday(v) {
-this.user.birthday = v; 
-}
-
-  /** Fetches user data from API */
-getUserData(): void {
-  const localUser : string| null= localStorage.getItem('user');
-
-  if (!localUser){
-    this.router.navigate(['/welcome']);
-    return;
   }
- const parsedUser: any = JSON.parse(localUser);
+
+  getUserData(): void {
+    const localUser = localStorage.getItem('user');
+    if (!localUser) {
+      this.router.navigate(['/welcome']);
+      return;
+    }
+    
+    const parsedUser = JSON.parse(localUser);
     this.fetchApiData.getUser().subscribe((result) => {
-       console.log('👤 fetched user:', result);
-      this.user = result;
-      delete this.user.password;
-      this.birthday = new Date(this.user.birthday).toLocaleDateString();
-      localStorage.setItem('user', JSON.stringify(result));
+      this.user = {...result, password: ''};
+     if (this.user.birthday) {
+      // Handle both ISO strings and YYYY-MM-DD formats
+      const dateStr = this.user.birthday.includes('T') 
+        ? this.user.birthday.split('T')[0] 
+        : this.user.birthday;
+      
+      const [year, month, day] = dateStr.split('-').map(Number);
+      this.birthday = new Date(year, month - 1, day);
+    } else {
+      this.birthday = null;
+    }
+      localStorage.setItem('user', JSON.stringify(this.user));
       this.getFavoriteMovies();
     });
   }
-   /** Updates user profile */
-updateUser(): void {
-  console.log('Updating user:', this.user);
-  this.fetchApiData.editUser(this.user).subscribe(
-    (result) => {
-      // Update local component state directly
-      this.user = { ...result };
-      delete this.user.password;
-      this.birthday = new Date(this.user.birthday).toLocaleDateString();
-      
-      // Update localStorage
-      localStorage.setItem('user', JSON.stringify(this.user));
-      
-      this.snackBar.open('Update successful', 'OK', {
-        duration: 2000,
-      });
-    },
-    (error) => {
-      this.snackBar.open('Update failed: ' + error, 'OK', {
-        duration: 2000,
-      });
+
+  updateUser(): void {
+
+    const birthdayStr = this.birthday 
+    ? `${this.birthday.getFullYear()}-${(this.birthday.getMonth() + 1).toString().padStart(2, '0')}-${this.birthday.getDate().toString().padStart(2, '0')}`
+    : null;
+
+    const updateData: any = {
+      firstName: this.user.firstName,
+      lastName: this.user.lastName,
+      username: this.user.username,
+      email: this.user.email,
+      Birthday: birthdayStr
+    };
+
+   if (this.password && this.password === this.confirmPassword) {
+      updateData.password = this.password;
+    } else if (this.password) {
+      this.snackBar.open('Passwords do not match', 'OK', { duration: 2000 });
+      return;
     }
-  );
-}
-        /** Gets user's favorite movies */
+
+    this.fetchApiData.editUser(updateData).subscribe(
+      (result) => {
+        this.user = {...result, password: ''};
+        if (result.birthday) {
+          const dateParts = result.birthday.split('-');
+          this.birthday = new Date(
+            parseInt(dateParts[0]),
+            parseInt(dateParts[1]) - 1,
+            parseInt(dateParts[2])
+          );
+        } else {
+          this.birthday = null;
+        }
+        this.password = '';
+        this.confirmPassword = '';
+        this.showPasswordFields = false;
+        
+        localStorage.setItem('user', JSON.stringify(result));
+        this.snackBar.open('Update successful', 'OK', { duration: 2000 });
+      },
+      (error) => {
+        this.snackBar.open('Update failed: ' + error, 'OK', { duration: 2000 });
+      }
+    );
+  }
+
   getFavoriteMovies(): void {
     this.fetchApiData.getAllMovies().subscribe((resp: any) => {
       const allMovies: any[] = resp;
-      this.favoriteMovies = allMovies.filter((movie) =>
+      const favoriteMovies = allMovies.filter((movie) =>
         this.user.favoriteMovies.includes(movie._id)
       );
-      return this.favoriteMovies;
+      
+      // Fixed: Use favoriteMovies instead of this.favoriteMovies
+      const posterRequests = favoriteMovies.map(movie => 
+        this.fetchApiData.getMoviePoster(movie.title).pipe(
+          map(posterUrl => ({ ...movie, posterImage: posterUrl }))
+      ));
+      
+      if (posterRequests.length > 0) {
+        forkJoin(posterRequests).subscribe(moviesWithPosters => {
+          this.favoriteMovies = moviesWithPosters;
+        });
+      } else {
+        this.favoriteMovies = favoriteMovies;
+      }
     });
   }
-     /** Removes movie from favorites */
+
   removeFavorite(movieId: string): void {
+    this.fetchApiData.deleteFavoriteMovie(movieId).subscribe({
+      next: (updatedUser) => {
+        this.user = updatedUser;
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        this.favoriteMovies = this.favoriteMovies.filter(movie => movie._id !== movieId);
+        this.snackBar.open('Movie removed from favorites', 'OK', { duration: 2000 });
+      },
+      error: (err) => {
+        this.snackBar.open('Could not remove movie', 'OK', { duration: 2000 });
+      }
+    });
+  }
 
-   this.fetchApiData.deleteFavoriteMovie(movieId).subscribe({
-    next: (updatedUser) => {
-      this.snackBar.open('Movie removed from favorites', 'OK', { duration: 2000 });
-      // Update your local user and re-filter the favorites list
-      this.user = updatedUser;
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      this.getFavoriteMovies();  
-    },
-    error: (err) => {
-      this.snackBar.open('Could not remove movie from favorites', 'OK', { duration: 2000 });
-    }
-  });
-}
-  
-
-      
-   /** Opens director details dialog */
-openDirectorDialog(director: any): void {
-   const moviesByDirector = this.favoriteMovies.filter(
+  openDirectorDialog(director: any): void {
+    const moviesByDirector = this.favoriteMovies.filter(
       (m: any) => m.director.name === director.name
     );
-  this.dialog.open(DirectorDialog, {
-    width: '400px',
-    data:{
-      director,
-      movies :moviesByDirector
-    }
-  });
-}
+    this.dialog.open(DirectorDialog, {
+      width: '400px',
+      data: {
+        director,
+        movies: moviesByDirector
+      }
+    });
+  }
 
-  /** Opens genre details dialog */
-openGenreDialog(genre: any): void {
-  this.dialog.open(GenreDialog, {
-    width: '400px',
-    data: genre
-  });
-}
+  openGenreDialog(genre: any): void {
+    this.dialog.open(GenreDialog, {
+      width: '400px',
+      data: genre
+    });
+  }
 
-  /** Opens movie details dialog */
-openMovieDetailsDialog(movie: any): void {
-  this.dialog.open(MovieDetailsDialog, {
-    width: '400px',
-    data: movie
-  });
-}
+  openMovieDetailsDialog(movie: any): void {
+    this.dialog.open(MovieDetailsDialog, {
+      width: '400px',
+      data: movie
+    });
+  }
 }

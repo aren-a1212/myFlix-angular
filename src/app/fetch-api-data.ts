@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { catchError, map } from 'rxjs';
 import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { throwError, Observable } from 'rxjs';
+import { forkJoin } from 'rxjs';
+
 import { UserLoginForm } from './user-login-form/user-login-form';
 
 /** Movie API base URL */
@@ -190,7 +192,23 @@ export class FetchApiDataService {
       catchError(this.handleError)
     );
   }
+private omdbKey = 'c1ed012d'; // Your OMDB API key
 
+public getMoviePoster(title: string): Observable<string> {
+  const omdbKey = 'c1ed012d'; // Your OMDB API key
+  return this.http.get<any>(
+    `https://www.omdbapi.com/?t=${encodeURIComponent(title)}&apikey=${omdbKey}`
+  ).pipe(
+    map(data => 
+      data.Poster && data.Poster !== 'N/A' 
+        ? data.Poster 
+        : 'https://via.placeholder.com/300x450?text=No+Image'
+    ),
+    catchError(() => 
+      ('https://via.placeholder.com/300x450?text=No+Image')
+    )
+  );
+}
 /** 
    * Removes movie from favorites 
    * @param movieId - Movie ID to remove

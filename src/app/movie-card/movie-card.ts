@@ -66,11 +66,7 @@ export class MovieCard implements OnInit{
   });
 }
    /** Checks if movie is favorite */
-  isFavorite(movieId: string): boolean {
-    const localUser: string | null = localStorage.getItem('user');
-    const parsedUser: any = localUser && JSON.parse(localUser);
-    return parsedUser.FavoriteMovies.includes(movieId);
-  }
+  
 
     /** Toggles movie favorite status */
   handleFavorite(movieId: string): void {
@@ -112,14 +108,38 @@ export class MovieCard implements OnInit{
     );
   }
 addFavorite(movieId: string): void {
-  this.fetchApiData.addFavoriteMovie(movieId).subscribe({
-    next: () => {
-      this.snackBar.open('Added to favorites!', 'OK', { duration: 2000 });
-      this.getMovies();    // reload so the icon toggles
-    },
-    error: () => this.snackBar.open('Could not add to favorites', 'OK', { duration: 2000 })
-  });
-}
+    // Find the movie in the local array
+    const movieIndex = this.movies.findIndex(m => m._id === movieId);
+    if (movieIndex === -1) return;
+
+    // Show optimistic UI update
+    this.movies[movieIndex].isFavorite = true;
+
+    this.fetchApiData.addFavoriteMovie(movieId).subscribe({
+      next: () => {
+        this.snackBar.open('Added to favorites!', 'OK', { duration: 2000 });
+        
+        // Update local storage
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!user.favoriteMovies.includes(movieId)) {
+          user.favoriteMovies.push(movieId);
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+      },
+      error: () => {
+        // Revert UI on error
+        this.movies[movieIndex].isFavorite = false;
+        this.snackBar.open('Could not add to favorites', 'OK', { duration: 2000 });
+      }
+    });
+  }
+
+   /** Checks if movie is favorite */
+  isFavorite(movieId: string): boolean {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return user.favoriteMovies?.includes(movieId) || false;
+  }
+
 
 
     /** Opens director info dialog */

@@ -25,6 +25,8 @@ import { UserProfileView } from './user-profile-view/user-profile-view';
 import { MovieDetailsDialog } from './movie-details-dialog/movie-details-dialog';
 import {MatGridListModule} from '@angular/material/grid-list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatNativeDateModule } from '@angular/material/core';
 import { DirectorDialog } from './director-dialog/director-dialog';
 import { GenreDialog } from './genre-dialog/genre-dialog';
 
@@ -64,7 +66,9 @@ const appRoutes:Routes=[
     MatToolbarModule,
     MatListModule,
     MatFormFieldModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatDatepickerModule,
+    MatNativeDateModule
   ],
   providers: [
     provideBrowserGlobalErrorListeners()

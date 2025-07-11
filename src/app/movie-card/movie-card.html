@@ -32,9 +32,11 @@
         <button mat-button color="primary" (click)="openMovieDetailsDialog(movie)">
           Synopsis
         </button>
-        <button mat-icon-button (click)="addFavorite(movie._id)">
-          <mat-icon>favorite_border</mat-icon>
-        </button>
+       <button mat-icon-button (click)="addFavorite(movie._id)">
+  <mat-icon [class.filled]="movie.isFavorite || isFavorite(movie._id)">
+    {{ (movie.isFavorite || isFavorite(movie._id)) ? 'favorite' : 'favorite_border' }}
+  </mat-icon>
+</button>
       </mat-card-actions>
     </mat-card>
   </div>
