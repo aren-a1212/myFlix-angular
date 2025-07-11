@@ -75,26 +75,29 @@ getUserData(): void {
     });
   }
    /** Updates user profile */
- updateUser(): void {
+updateUser(): void {
   console.log('Updating user:', this.user);
-    this.fetchApiData.editUser(this.user).subscribe(
-      (result) => {
-        this.snackBar.open('Update successful', 'OK', {
-          duration: 2000,
-        });
-        this.fetchApiData.getUser().subscribe((result) => {
-          this.user = result;
-          delete this.user.password;
-          localStorage.setItem('user', JSON.stringify(result));
-        });
-      },
-      (result) => {
-        this.snackBar.open('Update failed' + result, 'OK', {
-          duration: 2000,
-        });
-      }
-    );
-  }
+  this.fetchApiData.editUser(this.user).subscribe(
+    (result) => {
+      // Update local component state directly
+      this.user = { ...result };
+      delete this.user.password;
+      this.birthday = new Date(this.user.birthday).toLocaleDateString();
+      
+      // Update localStorage
+      localStorage.setItem('user', JSON.stringify(this.user));
+      
+      this.snackBar.open('Update successful', 'OK', {
+        duration: 2000,
+      });
+    },
+    (error) => {
+      this.snackBar.open('Update failed: ' + error, 'OK', {
+        duration: 2000,
+      });
+    }
+  );
+}
         /** Gets user's favorite movies */
   getFavoriteMovies(): void {
     this.fetchApiData.getAllMovies().subscribe((resp: any) => {
